@@ -1,8 +1,11 @@
 import { sha256Hex } from '@/analysis/hash'
+import { bridge } from '@/bridge'
 import type { Family } from '@/drivers/types'
-import { db, type DumpKind, type FirmwareBlob, type FirmwareRecord } from './db'
+import type { DumpKind, FirmwareBlob, FirmwareRecord } from './types'
 
 export type { DumpKind, FirmwareBlob, FirmwareRecord }
+
+export const MISSING_FILE = 'Файл прошивки не найден в папке — его удалили или переименовали вручную'
 
 export interface NewFirmware {
   name: string
@@ -19,52 +22,49 @@ export interface NewFirmware {
   appVersion?: string
 }
 
+const listeners = new Set<() => void>()
+const changed = () => listeners.forEach((fn) => fn())
+
+export function subscribeLibrary(fn: () => void): () => void {
+  listeners.add(fn)
+  return () => {
+    listeners.delete(fn)
+  }
+}
+
 export async function saveFirmware(input: NewFirmware): Promise<FirmwareRecord> {
   const { data, eeprom, ...meta } = input
-  const record: Omit<FirmwareRecord, 'id'> = {
-    ...meta,
-    note: meta.note ?? '',
-    size: data.length,
-    sha256: await sha256Hex(data),
-    createdAt: Date.now(),
-    hasEeprom: eeprom !== undefined,
-  }
-  const id = await db.transaction('rw', db.records, db.blobs, async () => {
-    const newId = await db.records.add(record)
-    await db.blobs.add({ id: newId, data, eeprom })
-    return newId
-  })
-  return { ...record, id }
+  const rec = await bridge().library.save({ ...meta, sha256: await sha256Hex(data) }, data, eeprom)
+  changed()
+  return rec
 }
 
 export function listFirmware(): Promise<FirmwareRecord[]> {
-  return db.records.orderBy('createdAt').reverse().toArray()
+  return bridge().library.list()
 }
 
-export function getFirmware(id: number): Promise<FirmwareRecord | undefined> {
-  return db.records.get(id)
+export async function getFirmware(id: number): Promise<FirmwareRecord | undefined> {
+  return (await listFirmware()).find((r) => r.id === id)
 }
 
-export function getFirmwareData(id: number): Promise<FirmwareBlob | undefined> {
-  return db.blobs.get(id)
+export async function getFirmwareData(id: number): Promise<FirmwareBlob | undefined> {
+  const blob = await bridge().library.read(id)
+  return blob ? { id, ...blob } : undefined
 }
 
 export async function updateFirmware(id: number, patch: Partial<Pick<FirmwareRecord, 'name' | 'note'>>): Promise<void> {
-  await db.records.update(id, patch)
+  await bridge().library.update(id, patch)
+  changed()
 }
 
 export async function deleteFirmware(id: number): Promise<void> {
-  await db.transaction('rw', db.records, db.blobs, async () => {
-    await db.records.delete(id)
-    await db.blobs.delete(id)
-  })
+  await bridge().library.remove(id)
+  changed()
 }
 
-export async function storageEstimate(): Promise<{ usage: number; quota: number } | null> {
-  if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return null
-  const e = await navigator.storage.estimate()
-  return { usage: e.usage ?? 0, quota: e.quota ?? 0 }
-}
+export const libraryFolder = () => bridge().library.folder()
+export const openLibraryFolder = () => bridge().library.openFolder()
+export const showFirmwareInFolder = (id: number) => bridge().library.showInFolder(id)
 
 export const KIND_LABELS: Record<DumpKind, string> = {
   full: 'Вся flash',

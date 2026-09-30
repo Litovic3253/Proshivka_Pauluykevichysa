@@ -1,5 +1,5 @@
 import type { Family } from '@/drivers/types'
-import type { DumpKind } from '@/library/db'
+import type { DumpKind } from '@/library/types'
 import { type AppDesc, parseAppDesc } from './appDesc'
 import { bootloaderOffset, ESP_IMAGE_MAGIC, type EspImage, looksEncrypted, parseEspImage } from './espImage'
 import { selectAppPartition } from './otadata'

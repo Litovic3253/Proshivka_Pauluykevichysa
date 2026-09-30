@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Download, FileSearch, Info, Plug, RefreshCw, Unplug, Upload } from 'lucide-react'
+import { Download, FileSearch, FolderOpen, Info, Plug, RefreshCw, Save, Unplug, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,9 +13,9 @@ import type { Partition } from '@/analysis/partitions'
 import { type Usage, usage } from '@/analysis/usage'
 import { explainError, type ExplainedError } from '@/drivers/explainError'
 import type { AppInfo, BoardDriver, BoardInfo, Family, ReadTarget } from '@/drivers/types'
-import { downloadBytes } from '@/lib/download'
+import { saveFile } from '@/lib/saveFile'
 import { cn } from '@/lib/utils'
-import { type FirmwareRecord, saveFirmware, updateFirmware } from '@/library/library'
+import { type FirmwareRecord, saveFirmware, showFirmwareInFolder, updateFirmware } from '@/library/library'
 import { defaultName } from '@/library/naming'
 import { type ConnStatus, useConnection } from '@/state/ConnectionContext'
 import { ErrorCallout } from '../components/ErrorCallout'
@@ -116,22 +116,27 @@ function ResultPanel({ outcome, onChange }: { outcome: ReadOutcome; onChange: (o
           </div>
         ))}
         {record ? (
-          <div className="text-sm text-muted-foreground">Сохранено в Библиотеку.</div>
+          <div className="text-sm text-muted-foreground">Сохранено в папку «Прошивки».</div>
         ) : (
           saveError && <ErrorCallout error={saveError} tone="warn" />
         )}
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => downloadBytes(data, `${name}.bin`)}>
-            <Download className="size-4" /> Скачать .bin
+          <Button onClick={() => void saveFile(`${name}.bin`, data)}>
+            <Save className="size-4" /> Сохранить .bin
           </Button>
           {family === 'avr' && (
-            <Button variant="outline" onClick={() => downloadBytes(formatIntelHex(data, baseAddress), `${name}.hex`)}>
-              Скачать .hex
+            <Button variant="outline" onClick={() => void saveFile(`${name}.hex`, formatIntelHex(data, baseAddress))}>
+              Сохранить .hex
             </Button>
           )}
           {eeprom && (
-            <Button variant="outline" onClick={() => downloadBytes(eeprom, `${name}_eeprom.bin`)}>
-              Скачать EEPROM
+            <Button variant="outline" onClick={() => void saveFile(`${name}_eeprom.bin`, eeprom)}>
+              Сохранить EEPROM
+            </Button>
+          )}
+          {record && (
+            <Button variant="outline" onClick={() => void showFirmwareInFolder(record.id)}>
+              <FolderOpen className="size-4" /> Показать в папке
             </Button>
           )}
           {record && (

@@ -4,7 +4,7 @@ import type { FirmwareRecord } from '@/library/library'
 import { ErrorCallout } from '../components/ErrorCallout'
 import { Panel } from '../components/Panel'
 import { StatCard, UsageBar } from '../components/StatCard'
-import { formatDate } from '../library/downloadRecord'
+import { formatDate } from '../library/recordFiles'
 
 function Row({ k, v }: { k: string; v: string }) {
   return (

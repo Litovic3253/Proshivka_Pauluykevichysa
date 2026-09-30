@@ -3,7 +3,7 @@ import { parseEspImage } from '@/analysis/espImage'
 import { parseIntelHex } from '@/analysis/intelHex'
 import { PARTITION_TABLE_OFFSET, PARTITION_TABLE_SIZE, parsePartitionTable } from '@/analysis/partitions'
 import type { Family } from '@/drivers/types'
-import type { DumpKind } from './db'
+import type { DumpKind } from './types'
 
 export interface IdentifiedFile {
   name: string

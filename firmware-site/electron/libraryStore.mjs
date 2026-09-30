@@ -9,7 +9,6 @@ const INDEX = 'library.json'
 const META_FIELDS = ['name', 'family', 'chip', 'kind', 'partitionLabel', 'baseAddress', 'sha256', 'source', 'appName', 'appVersion', 'note']
 
 export function safeFileName(name) {
-  // eslint-disable-next-line no-control-regex
   const cleaned = String(name).replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_').replace(/[. ]+$/, '').trim()
   return (cleaned || 'firmware').slice(0, 120)
 }

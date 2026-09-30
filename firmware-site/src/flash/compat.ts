@@ -2,7 +2,7 @@ import { formatSize, hexAddr } from '@/analysis/bytes'
 import type { Partition } from '@/analysis/partitions'
 import { appAreaEnd } from '@/drivers/avr/avrDriver'
 import type { BoardInfo, Family } from '@/drivers/types'
-import type { DumpKind } from '@/library/db'
+import type { DumpKind } from '@/library/types'
 
 export interface CompatInput {
   firmware: { family: Family; chip: string; kind: DumpKind; size: number; baseAddress: number; partitionLabel?: string }

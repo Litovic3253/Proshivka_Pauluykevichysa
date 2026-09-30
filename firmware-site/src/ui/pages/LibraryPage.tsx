@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { Download, FileSearch, Pencil, Trash2, Upload } from 'lucide-react'
+import { FileSearch, FolderOpen, Pencil, Save, Trash2, Upload } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,9 +17,20 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { formatSize } from '@/analysis/bytes'
-import { deleteFirmware, type FirmwareRecord, kindLabel, listFirmware, storageEstimate, updateFirmware } from '@/library/library'
+import { explainError, type ExplainedError } from '@/drivers/explainError'
+import {
+  deleteFirmware,
+  type FirmwareRecord,
+  kindLabel,
+  libraryFolder,
+  openLibraryFolder,
+  showFirmwareInFolder,
+  updateFirmware,
+} from '@/library/library'
+import { useLibrary } from '@/library/useLibrary'
+import { ErrorCallout } from '../components/ErrorCallout'
 import { Panel } from '../components/Panel'
-import { downloadRecord, formatDate } from '../library/downloadRecord'
+import { formatDate, saveRecordAs } from '../library/recordFiles'
 import { ImportButton } from '../library/ImportButton'
 
 function EditDialog({ record, onClose }: { record: FirmwareRecord | null; onClose: () => void }) {
@@ -71,20 +81,27 @@ function IconLink({ href, label, children }: { href: string; label: string; chil
 }
 
 export function LibraryPage() {
-  const records = useLiveQuery(listFirmware, [], [] as FirmwareRecord[])
-  const [estimate, setEstimate] = useState<{ usage: number; quota: number } | null>(null)
+  const records = useLibrary()
+  const [folder, setFolder] = useState<{ path: string; bytes: number; count: number } | null>(null)
   const [editing, setEditing] = useState<FirmwareRecord | null>(null)
   const [deleting, setDeleting] = useState<FirmwareRecord | null>(null)
+  const [error, setError] = useState<ExplainedError | null>(null)
+  const act = (fn: () => Promise<void>) => void fn().then(() => setError(null), (e) => setError(explainError(e)))
 
   useEffect(() => {
-    void storageEstimate().then(setEstimate)
+    void libraryFolder().then(setFolder)
   }, [records])
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-xl font-medium">Библиотека</h1>
-        <ImportButton />
+        <div className="flex flex-wrap items-start gap-2">
+          <Button variant="outline" onClick={() => act(openLibraryFolder)}>
+            <FolderOpen className="size-4" /> Открыть папку
+          </Button>
+          <ImportButton />
+        </div>
       </div>
       <Panel title={`Прошивки · ${records.length}`}>
         {records.length === 0 ? (
@@ -116,14 +133,17 @@ export function LibraryPage() {
                   <TableCell className="hidden lg:table-cell">{formatDate(r.createdAt)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-0.5">
-                      <Button variant="ghost" size="icon" title="Скачать .bin" aria-label="Скачать .bin" onClick={() => void downloadRecord(r, 'bin')}>
-                        <Download className="size-4" />
+                      <Button variant="ghost" size="icon" title="Сохранить .bin как…" aria-label="Сохранить .bin как…" onClick={() => act(() => saveRecordAs(r, 'bin'))}>
+                        <Save className="size-4" />
                       </Button>
                       {r.family === 'avr' && (
-                        <Button variant="ghost" size="sm" title="Скачать .hex" onClick={() => void downloadRecord(r, 'hex')}>
+                        <Button variant="ghost" size="sm" title="Сохранить .hex как…" onClick={() => act(() => saveRecordAs(r, 'hex'))}>
                           HEX
                         </Button>
                       )}
+                      <Button variant="ghost" size="icon" title="Показать в папке" aria-label="Показать в папке" onClick={() => act(() => showFirmwareInFolder(r.id))}>
+                        <FolderOpen className="size-4" />
+                      </Button>
                       <IconLink href={`#/analysis/${r.id}`} label="Анализ"><FileSearch className="size-4" /></IconLink>
                       <IconLink href={`#/flash/${r.id}`} label="Залить"><Upload className="size-4" /></IconLink>
                       <Button variant="ghost" size="icon" title="Название и заметка" aria-label="Название и заметка" onClick={() => setEditing(r)}>
@@ -139,10 +159,11 @@ export function LibraryPage() {
             </TableBody>
           </Table>
         )}
+        {error && <ErrorCallout error={error} className="mt-4" />}
       </Panel>
-      {estimate && (
-        <p className="text-xs text-muted-foreground">
-          В браузере занято {formatSize(estimate.usage)} из {formatSize(estimate.quota)}. Прошивки хранятся только в этом браузере и никуда не отправляются.
+      {folder && (
+        <p className="text-xs break-all text-muted-foreground">
+          Папка: {folder.path} · {folder.count} прошивок · {formatSize(folder.bytes)}. Файлы можно копировать и переносить вместе с программой.
         </p>
       )}
       <EditDialog record={editing} onClose={() => setEditing(null)} />
@@ -150,11 +171,11 @@ export function LibraryPage() {
         <AlertDialogContent className="rounded-[20px]">
           <AlertDialogHeader>
             <AlertDialogTitle>Удалить «{deleting?.name}»?</AlertDialogTitle>
-            <AlertDialogDescription>Прошивка исчезнет из Библиотеки этого браузера. Скачанные файлы останутся.</AlertDialogDescription>
+            <AlertDialogDescription>Запись исчезнет из Библиотеки, файлы прошивки уйдут в Корзину Windows.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleting && void deleteFirmware(deleting.id)}>Удалить</AlertDialogAction>
+            <AlertDialogAction onClick={() => deleting && act(() => deleteFirmware(deleting.id))}>Удалить</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

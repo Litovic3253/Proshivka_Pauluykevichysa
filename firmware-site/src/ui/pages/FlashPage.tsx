@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { Info, RefreshCw, Upload } from 'lucide-react'
 import {
   AlertDialog,
@@ -18,13 +17,14 @@ import type { Partition } from '@/analysis/partitions'
 import type { ExplainedError } from '@/drivers/explainError'
 import type { BoardDriver } from '@/drivers/types'
 import { checkCompatibility } from '@/flash/compat'
-import { type FirmwareRecord, getFirmwareData, kindLabel, listFirmware } from '@/library/library'
+import { getFirmwareData, kindLabel, MISSING_FILE } from '@/library/library'
+import { useLibrary } from '@/library/useLibrary'
 import { useConnection } from '@/state/ConnectionContext'
 import { ErrorCallout } from '../components/ErrorCallout'
 import { OperationProgress } from '../components/OperationProgress'
 import { Panel } from '../components/Panel'
 import { StatusDot } from '../components/StatusDot'
-import { formatDate } from '../library/downloadRecord'
+import { formatDate } from '../library/recordFiles'
 import { ImportButton } from '../library/ImportButton'
 
 interface BoardLayout {
@@ -38,7 +38,7 @@ export function FlashPage({ id }: { id: number | null }) {
   const portLabel = status.kind === 'connected' ? status.portLabel : ''
   const currentDriver = useRef<BoardDriver | null>(null)
   currentDriver.current = driver
-  const records = useLiveQuery(listFirmware, [], [] as FirmwareRecord[])
+  const records = useLibrary()
   const [selectedId, setSelectedId] = useState<number | null>(id)
   const record = records.find((r) => r.id === selectedId) ?? null
   const [layout, setLayout] = useState<BoardLayout | null>(null)
@@ -82,7 +82,7 @@ export function FlashPage({ id }: { id: number | null }) {
     if (!record || !compat?.ok) return
     const blob = await getFirmwareData(record.id)
     if (!blob) {
-      setError({ title: 'Прошивка не найдена в Библиотеке', raw: '' })
+      setError({ title: MISSING_FILE, raw: '' })
       return
     }
     const r = await run('Заливка прошивки', (d, p, s) => d.write(blob.data, compat.address, p, s))
