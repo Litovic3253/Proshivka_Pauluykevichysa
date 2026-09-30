@@ -1,6 +1,8 @@
+import type { PortChoice } from '@/bridge'
+
 /**
- * Web Serial не сообщает сайту номер COM-порта (его видно только в окне выбора Chrome),
- * поэтому порт подписывается по USB-адаптеру.
+ * Подписи портов. Сам SerialPort знает только USB VID:PID, поэтому номер COM берётся
+ * из окна выбора порта программы (describeElectronPort); describePort — запасной вариант.
  */
 const KNOWN_ADAPTERS: Record<string, string> = {
   '1A86:7523': 'CH340',
@@ -24,4 +26,18 @@ export function describePort(info: Partial<SerialPortInfo>): string {
   const vid = hex4(info.usbVendorId)
   const pid = info.usbProductId === undefined ? '????' : hex4(info.usbProductId)
   return `${KNOWN_ADAPTERS[`${vid}:${pid}`] ?? 'USB-адаптер'} · USB ${vid}:${pid}`
+}
+
+/** Подпись порта в окне выбора: «COM5 · CH340 · USB 1A86:7523». */
+export function describeElectronPort(p: PortChoice): string {
+  const parts = [p.portName]
+  const vid = p.vendorId !== undefined ? Number(p.vendorId) : NaN
+  const pid = p.productId !== undefined ? Number(p.productId) : NaN
+  if (Number.isFinite(vid) && Number.isFinite(pid)) {
+    const key = `${hex4(vid)}:${hex4(pid)}`
+    parts.push(KNOWN_ADAPTERS[key] ?? p.displayName ?? 'USB-адаптер', `USB ${key}`)
+  } else if (p.displayName) {
+    parts.push(p.displayName)
+  }
+  return parts.join(' · ')
 }

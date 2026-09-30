@@ -3,9 +3,10 @@ import { detectBoard } from '@/drivers/detect'
 import { DeviceLostError } from '@/drivers/errors'
 import { explainError, type ExplainedError } from '@/drivers/explainError'
 import type { BoardDriver, Progress } from '@/drivers/types'
-import { describePort } from '@/serial/portName'
+import { describeElectronPort, describePort } from '@/serial/portName'
 import { DisconnectGuard } from './disconnectGuard'
 import { OperationRunner, type OpState, type RunResult } from './operationRunner'
+import { takeLastChosen } from './portPicker'
 
 export type ConnStatus =
   | { kind: 'idle' }
@@ -52,14 +53,14 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const op = useSyncExternalStore(runner.subscribe, runner.getState)
   const portRef = useRef<SerialPort | null>(null)
   const driverRef = useRef<BoardDriver | null>(null)
+  const portLabelRef = useRef('')
 
   const addLog = useCallback((line: string) => {
     setLog((l) => [...l.slice(-499), `${timestamp()}  ${line}`])
   }, [])
 
   const connect = useCallback(
-    async (port: SerialPort) => {
-      const portLabel = describePort(port.getInfo())
+    async (port: SerialPort, portLabel: string) => {
       setStatus({ kind: 'detecting', portLabel })
       addLog(`Порт: ${portLabel}`)
       try {
@@ -98,17 +99,20 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       if (!error.silent) setStatus({ kind: 'error', error })
       return
     }
+    const chosen = takeLastChosen()
+    const portLabel = chosen ? describeElectronPort(chosen) : describePort(port.getInfo())
     await disconnect()
     portRef.current = port
+    portLabelRef.current = portLabel
     setHasPort(true)
-    await connect(port)
+    await connect(port, portLabel)
   }, [supported, connect, disconnect])
 
   const reconnect = useCallback(async () => {
     const port = portRef.current
     if (!port) return
     await disconnect()
-    await connect(port)
+    await connect(port, portLabelRef.current || describePort(port.getInfo()))
   }, [connect, disconnect])
 
   // Кабель выдернули: операция прерывается, статус — «Кабель отключён».

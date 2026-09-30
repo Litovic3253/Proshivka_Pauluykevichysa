@@ -5,6 +5,7 @@ import { DevicePage } from '../pages/DevicePage'
 import { FlashPage } from '../pages/FlashPage'
 import { LibraryPage } from '../pages/LibraryPage'
 import { useHashRoute } from '../routing'
+import { PortPickerDialog } from './PortPickerDialog'
 import { Sidebar } from './Sidebar'
 import { ThemeDialog } from './ThemeDialog'
 
@@ -24,6 +25,7 @@ export function AppShell() {
         </div>
       </main>
       <ThemeDialog open={themeOpen} onOpenChange={setThemeOpen} />
+      <PortPickerDialog />
     </div>
   )
 }
