@@ -7,7 +7,8 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
-  server: { port: 5173, strictPort: true },
+  // 127.0.0.1, а не localhost: Node может слушать только IPv6 [::1], и браузер не достучится
+  server: { host: '127.0.0.1', port: 5173, strictPort: true },
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],

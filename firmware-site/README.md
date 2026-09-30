@@ -1,54 +1,45 @@
-# React + TypeScript + Vite
+# Прошивки Паулюкевичуса
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Сайт для чтения, скачивания и заливки прошивок Arduino (Uno / Nano / Pro Mini, ATmega328P)
+и ESP32 / ESP32-S2 / ESP32-S3 / ESP32-C3 прямо из браузера. Сервера нет: плата подключается
+к компьютеру того, кто открыл сайт, прошивки хранятся только в его браузере.
 
-Currently, two official plugins are available:
+## Запуск на своём ПК
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Двойной щелчок по `start.bat` — при первом запуске установятся зависимости, затем откроется
+http://127.0.0.1:5173. Нужен Chrome, Edge или Яндекс Браузер на компьютере (Web Serial).
 
-## Expanding the ESLint configuration
+## Публикация в интернете
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Папку `dist/` можно выложить на любой статический хостинг с HTTPS (GitHub Pages, Netlify,
+Cloudflare Pages). Без HTTPS браузер не даст доступ к COM-порту.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Проверка на железе
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+1. Arduino Nano/Uno: «Выбрать COM-порт» → зелёная точка «ATmega328P» → «Считать» → «Скачать .hex».
+2. Экран «Заливка»: залить эту прошивку на вторую такую же плату → «Готово» → плата работает так же.
+3. Считать вторую плату и сравнить SHA-256 с первой (совпадёт, если загрузчики одинаковые).
+4. ESP32: «Вся flash» (4 МБ — 1–5 минут) → залить на вторую плату → работает, настройки Wi-Fi сохранились.
+5. ESP32: «Только приложение» → залить на плату с той же таблицей разделов.
+6. Выдернуть кабель во время чтения → «Кабель отключён», страница не зависла.
+7. Открыть монитор порта в Arduino IDE и нажать «Выбрать COM-порт» → «Порт занят другой программой».
+
+## Разработка
+
+```bash
+npm test        # юнит-тесты (эмулятор загрузчика Arduino, поддельный esptool, фикстуры ESP-IDF)
+npm run build   # сборка
 ```
+
+Эталонные прошивки для тестов лежат в `tests/fixtures/` и собираются PlatformIO из `tools/fixtures/`:
+
+- `avr-blink` — `pio run -d tools/fixtures/avr-blink`, затем скопировать `.pio/build/uno/firmware.hex`
+  в `tests/fixtures/avr-blink.hex`.
+- `esp32-hello` — ESP-IDF не собирает проекты в путях с пробелами («Рабочий стол»), поэтому папку
+  нужно скопировать в путь без пробелов, собрать там `pio run` и скопировать `bootloader.bin`,
+  `partitions.bin`, `firmware.bin` в `tests/fixtures/esp32-*.bin`.
+- `make_otadata.py` — пересоздаёт `tests/fixtures/esp32-otadata-slot1.bin`.

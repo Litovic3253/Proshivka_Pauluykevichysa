@@ -138,7 +138,7 @@ export function FlashPage({ id }: { id: number | null }) {
             <StatusDot tone="idle" />
             <span className="text-sm">Плата не подключена.</span>
             <Button variant="outline" asChild>
-              <a href="#/device">Подключить на экране «Устройство»</a>
+              <a href="#/device">Подключить плату</a>
             </Button>
           </div>
         )}
