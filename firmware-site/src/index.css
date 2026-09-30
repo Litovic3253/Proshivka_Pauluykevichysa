@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -17,7 +19,7 @@
 
 /* Светлая тема Студии по умолчанию; остальные темы переопределяют эти переменные из JS (ui/theme). */
 :root {
-  --radius: 0.75rem; /* rounded-md у кнопок и полей = 10 px, как в Студии */
+  --radius: 0.625rem; /* rounded-lg у кнопок и полей shadcn (nova) = 10 px, как в Студии */
   --background: #FAFAFA;
   --foreground: #09090B;
   --card: #FFFFFF;
