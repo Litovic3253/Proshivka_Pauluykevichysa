@@ -48,6 +48,13 @@ describe('connectEsp32', () => {
     expect(s.created[0].disconnects).toBe(1)
   })
 
+  it('если esptool молча откатился на 115200 — пробуем следующую скорость и показываем настоящую', async () => {
+    const s = setup(buildEspFlash(), { downgradeAtBaud: [921600] })
+    const d = await s.connect()
+    expect(d.info.baud).toBe(460800)
+    expect(s.created[0].disconnects).toBe(1)
+  })
+
   it('не ESP32 — сразу ошибка, без перебора скоростей', async () => {
     const s = setup(buildEspFlash(), { notEsp: true })
     await expect(s.connect()).rejects.toThrow(/Failed to connect/)

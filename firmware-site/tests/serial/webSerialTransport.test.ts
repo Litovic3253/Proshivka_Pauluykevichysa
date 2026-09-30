@@ -29,6 +29,11 @@ function fakePort() {
     port: port as unknown as SerialPort,
     push: (...b: number[]) => controller.enqueue(Uint8Array.from(b)),
     fail: (e: Error) => controller.error(e),
+    /** Нефатальная ошибка линии (FramingError и т. п.): Web Serial заменяет port.readable новым потоком. */
+    failNonFatal: (name: string) => {
+      controller.error(new DOMException('line error', name))
+      port.readable = new ReadableStream<Uint8Array>({ start: (c) => { controller = c } })
+    },
     written,
     signals,
     opened,
@@ -86,6 +91,28 @@ describe('WebSerialTransport', () => {
     const pending = t.read(1, 1000)
     f.fail(new DOMException('The device has been lost.', 'NetworkError'))
     await expect(pending).rejects.toMatchObject({ name: 'NetworkError' })
+    await t.close()
+  })
+
+  it('ошибка кадра (скетч шлёт на другой скорости) не убивает порт', async () => {
+    const f = fakePort()
+    const t = new WebSerialTransport(f.port)
+    await t.open(115200)
+    f.failNonFatal('FramingError')
+    await new Promise((r) => setTimeout(r, 10))
+    f.push(5)
+    expect(Array.from(await t.read(1, 200))).toEqual([5])
+    await t.close()
+  })
+
+  it('пока никто не читает, буфер не растёт бесконечно — старое выбрасывается', async () => {
+    const f = fakePort()
+    const t = new WebSerialTransport(f.port)
+    await t.open(115200)
+    f.push(...new Array(70_000).fill(1))
+    f.push(...new Array(70_000).fill(2))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(Array.from(await t.read(1, 100))).toEqual([2])
     await t.close()
   })
 

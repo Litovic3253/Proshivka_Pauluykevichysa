@@ -1,3 +1,4 @@
+import { DeviceLostError } from '@/drivers/errors'
 import { explainError, type ExplainedError } from '@/drivers/explainError'
 import type { Progress } from '@/drivers/types'
 
@@ -48,10 +49,18 @@ export class OperationRunner {
       mine.state = { ...mine.state, done, total }
       this.emit()
     }
+    // Кабель выдернули — esptool может ждать ответа до 100 с; не ждём его, плата всё равно потеряна.
+    // Обычный «Стоп» ждёт конца текущего куска, чтобы следующая операция не столкнулась с этой на порту.
+    const cableLost = new Promise<never>((_, reject) => {
+      controller.signal.addEventListener('abort', () => {
+        if (controller.signal.reason instanceof DeviceLostError) reject(controller.signal.reason)
+      })
+    })
+    cableLost.catch(() => {})
     try {
-      return { ok: true, value: await fn(onProgress, controller.signal) }
+      return { ok: true, value: await Promise.race([fn(onProgress, controller.signal), cableLost]) }
     } catch (e) {
-      return { ok: false, error: explainError(e) }
+      return { ok: false, error: explainError(controller.signal.aborted ? controller.signal.reason : e) }
     } finally {
       this.current = null
       this.emit()

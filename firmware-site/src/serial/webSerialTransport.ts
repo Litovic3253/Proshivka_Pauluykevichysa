@@ -1,12 +1,18 @@
 import { concatBytes } from '@/analysis/bytes'
 import { type ByteTransport, SerialTimeoutError, sleep } from './transport'
 
+/** Ошибки линии, после которых Web Serial подставляет новый port.readable, — порт жив. */
+const NON_FATAL_ERRORS = new Set(['FramingError', 'BreakError', 'ParityError', 'BufferOverrunError'])
+/** Между операциями скетч может печатать без остановки — храним только хвост. */
+const MAX_BUFFER = 64 * 1024
+
 export class WebSerialTransport implements ByteTransport {
   private buf = new Uint8Array(0)
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null
   private loop: Promise<void> | null = null
   private failure: unknown = null
   private wake: (() => void) | null = null
+  private closing = false
 
   constructor(readonly port: SerialPort) {}
 
@@ -14,27 +20,33 @@ export class WebSerialTransport implements ByteTransport {
     await this.port.open({ baudRate: baud, bufferSize: 64 * 1024 })
     this.buf = new Uint8Array(0)
     this.failure = null
-    const readable = this.port.readable
-    if (!readable) throw new Error('Порт открыт, но чтение из него недоступно')
-    this.reader = readable.getReader()
-    this.loop = this.readLoop(this.reader)
+    this.closing = false
+    if (!this.port.readable) throw new Error('Порт открыт, но чтение из него недоступно')
+    this.loop = this.readLoop()
   }
 
-  private async readLoop(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
-    try {
-      for (;;) {
-        const { value, done } = await reader.read()
-        if (done) break
-        if (value?.length) {
-          this.buf = concatBytes(this.buf, value)
-          this.wake?.()
+  private async readLoop(): Promise<void> {
+    while (this.port.readable && !this.closing) {
+      const reader = this.port.readable.getReader()
+      this.reader = reader
+      try {
+        for (;;) {
+          const { value, done } = await reader.read()
+          if (done) return
+          if (value?.length) {
+            const next = concatBytes(this.buf, value)
+            this.buf = next.length > MAX_BUFFER ? next.slice(next.length - MAX_BUFFER) : next
+            this.wake?.()
+          }
         }
+      } catch (e) {
+        if (NON_FATAL_ERRORS.has((e as { name?: string } | null)?.name ?? '')) continue
+        this.failure = e
+        this.wake?.()
+        return
+      } finally {
+        reader.releaseLock()
       }
-    } catch (e) {
-      this.failure = e
-      this.wake?.()
-    } finally {
-      reader.releaseLock()
     }
   }
 
@@ -83,6 +95,7 @@ export class WebSerialTransport implements ByteTransport {
   }
 
   async close(): Promise<void> {
+    this.closing = true
     await this.reader?.cancel().catch(() => {})
     await this.loop
     this.reader = null

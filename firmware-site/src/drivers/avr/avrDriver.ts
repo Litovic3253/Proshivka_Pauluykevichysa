@@ -1,4 +1,4 @@
-import { hexBytes, sameBytes } from '@/analysis/bytes'
+import { hexAddr, hexBytes, sameBytes } from '@/analysis/bytes'
 import { type ByteTransport, sleep } from '@/serial/transport'
 import { UnsupportedChipError, VerifyError } from '../errors'
 import type { AvrBootloader, BoardDriver, BoardInfo, Progress, ReadResult, ReadTarget } from '../types'
@@ -103,6 +103,12 @@ export class AvrDriver implements BoardDriver {
     signal.throwIfAborted()
     const end = appAreaEnd(this.info.bootloader ?? 'unknown')
     const { pageSize } = ATMEGA328P
+    // Скетч с платы на Optiboot может занимать до 0x7E00 — на плате со старым загрузчиком он не влезет.
+    if (data.subarray(end, appAreaEnd('optiboot')).some((b) => b !== 0xff)) {
+      throw new Error(
+        `Прошивка не помещается: загрузчик этой платы начинается с ${hexAddr(end)}, а в файле есть код дальше. Нужна плата с загрузчиком Optiboot`,
+      )
+    }
     // Пишем всю область приложения, включая пустые страницы: иначе на плате останутся
     // хвосты старой прошивки. Загрузчик сам себя не перезаписывает — его область пропускаем.
     const image = new Uint8Array(end).fill(0xff)

@@ -44,6 +44,21 @@ describe('OperationRunner', () => {
     expect(await pending).toMatchObject({ ok: false, error: { title: 'Кабель отключён' } })
   })
 
+  it('выдернутый кабель завершает зависшую операцию сразу, не дожидаясь таймаута esptool', async () => {
+    const r = new OperationRunner()
+    const pending = r.run('Чтение', () => new Promise(() => {}))
+    r.cancel(new DeviceLostError())
+    expect(await pending).toMatchObject({ ok: false, error: { title: 'Кабель отключён' } })
+    expect(r.getState()).toBeNull()
+  }, 1000)
+
+  it('после отключения кабеля ошибка драйвера показывается как «Кабель отключён»', async () => {
+    const r = new OperationRunner()
+    const pending = r.run('Запись', (_p, signal) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('Порт закрыт')))))
+    r.cancel(new DeviceLostError())
+    expect(await pending).toMatchObject({ ok: false, error: { title: 'Кабель отключён' } })
+  })
+
   it('ошибки переводятся в понятный текст', async () => {
     const r = new OperationRunner()
     const res = await r.run('x', async () => {

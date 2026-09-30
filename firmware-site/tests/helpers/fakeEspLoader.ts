@@ -4,6 +4,8 @@ import type { EspLoaderLike } from '@/drivers/esp32/esp32Driver'
 export interface FakeOptions {
   notEsp?: boolean
   failReadAtBaud?: number[]
+  /** esptool-js при неудачной смене скорости молча откатывается на 115200. */
+  downgradeAtBaud?: number[]
 }
 
 /** ESP32 с 4 МБ flash: отвечает как esptool-js, но работает с массивом в памяти. */
@@ -12,12 +14,15 @@ export class FakeEspLoader implements EspLoaderLike {
   writes: { address: number; length: number; flashMode: string }[] = []
   disconnects = 0
   resets = 0
+  baudrate: number
 
   constructor(
     public flash: Uint8Array,
     public baud: number,
     private readonly opts: FakeOptions = {},
-  ) {}
+  ) {
+    this.baudrate = baud
+  }
 
   transport = {
     disconnect: async () => {
@@ -28,6 +33,7 @@ export class FakeEspLoader implements EspLoaderLike {
   async main(): Promise<string> {
     if (this.opts.notEsp) throw new Error('Failed to connect with the device')
     this.chip = { CHIP_NAME: 'ESP32', readMac: async () => '7c:df:a1:00:11:22' }
+    if (this.opts.downgradeAtBaud?.includes(this.baud)) this.baudrate = 115200
     return 'ESP32-D0WD-V3 (revision v3.1)'
   }
 

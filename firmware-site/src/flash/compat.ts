@@ -5,7 +5,7 @@ import type { BoardInfo, Family } from '@/drivers/types'
 import type { DumpKind } from '@/library/db'
 
 export interface CompatInput {
-  firmware: { family: Family; chip: string; kind: DumpKind; size: number; partitionLabel?: string }
+  firmware: { family: Family; chip: string; kind: DumpKind; size: number; baseAddress: number; partitionLabel?: string }
   board: BoardInfo
   partitions?: Partition[]
   activeApp?: Partition | null
@@ -24,8 +24,14 @@ export function checkCompatibility({ firmware, board, partitions = [], activeApp
     return fail(`Прошивка (${formatSize(firmware.size)}) не помещается во flash платы (${formatSize(board.flashSize)})`)
   }
   if (board.family === 'avr') {
+    if (firmware.baseAddress !== 0) {
+      return fail(`Файл начинается с адреса ${hexAddr(firmware.baseAddress)}, а скетч Arduino начинается с 0 — похоже, это загрузчик, а не прошивка`)
+    }
     const end = appAreaEnd(board.bootloader ?? 'unknown')
-    const warnings = firmware.size > end ? ['Область загрузчика из файла будет пропущена — на плате останется её собственный загрузчик'] : []
+    const warnings =
+      firmware.size > end
+        ? [`Всё, что в файле дальше ${hexAddr(end)} (область загрузчика), будет пропущено — на плате останется её собственный загрузчик. Если там код скетча, заливка остановится до записи`]
+        : []
     return { ok: true, address: 0, warnings }
   }
   if (firmware.kind === 'full') {

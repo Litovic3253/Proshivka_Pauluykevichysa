@@ -16,6 +16,8 @@ import type { AppInfo, BoardDriver, BoardInfo, Progress, ReadResult, ReadTarget 
 /** То, чем мы пользуемся из ESPLoader, — чтобы в тестах подставить поддельный загрузчик. */
 export interface EspLoaderLike {
   chip?: { CHIP_NAME: string; readMac(loader: never): Promise<string> }
+  /** esptool-js при неудачной смене скорости молча возвращается на 115200 и меняет это поле. */
+  baudrate?: number
   main(mode?: 'default_reset'): Promise<string>
   detectFlashSize(): Promise<string | undefined>
   readFlash(
@@ -56,6 +58,7 @@ export async function connectEsp32(
     const loader = factory(port, baud, log)
     try {
       const description = await loader.main('default_reset')
+      if (loader.baudrate !== undefined && loader.baudrate < baud) throw new Error(`Скорость ${baud} не держится`)
       await loader.readFlash(0, 0x1000) // проверяем, что выбранная скорость держится
       const flashSize = parseFlashSize(await loader.detectFlashSize())
       const chip = loader.chip!

@@ -105,6 +105,14 @@ describe('AvrDriver.write', () => {
     expect(appAreaEnd('unknown')).toBe(0x7800)
   })
 
+  it('скетч с Uno (до 0x7E00) не обрезается молча на плате со старым загрузчиком', async () => {
+    const emu = new Stk500Emulator({ bootloader: 'atmegaboot' })
+    const d = await connectAvr(emu, 57600)
+    const big = new Uint8Array(0x7a00).fill(0x33)
+    await expect(d.write(big, 0, noop, live())).rejects.toThrow(/не помещается/)
+    expect(emu.pageWrites).toBe(0)
+  })
+
   it('битая запись ловится проверкой', async () => {
     const d = await connectAvr(new Stk500Emulator({ bootloader: 'optiboot', corruptWrites: true }), 115200)
     await expect(d.write(new Uint8Array(256), 0, noop, live())).rejects.toBeInstanceOf(VerifyError)

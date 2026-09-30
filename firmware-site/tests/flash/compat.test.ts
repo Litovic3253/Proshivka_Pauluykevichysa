@@ -14,6 +14,7 @@ const fw = (o: Partial<Parameters<typeof checkCompatibility>[0]['firmware']> = {
   chip: 'ESP32',
   kind: 'full' as const,
   size: 0x400000,
+  baseAddress: 0,
   ...o,
 })
 
@@ -44,9 +45,15 @@ describe('checkCompatibility', () => {
   })
 
   it('Arduino: с адреса 0, предупреждение про область загрузчика', () => {
-    const avr = { family: 'avr' as const, chip: 'ATmega328P', kind: 'full' as const }
+    const avr = { family: 'avr' as const, chip: 'ATmega328P', kind: 'full' as const, baseAddress: 0 }
     expect(checkCompatibility({ firmware: { ...avr, size: 2000 }, board: nano })).toEqual({ ok: true, address: 0, warnings: [] })
     const full = checkCompatibility({ firmware: { ...avr, size: 0x8000 }, board: nano })
     expect(full.ok && full.warnings[0]).toMatch(/загрузчик/)
+  })
+
+  it('Arduino: HEX не с адреса 0 (например, сам загрузчик) — запрет', () => {
+    const r = checkCompatibility({ firmware: { family: 'avr', chip: 'ATmega328P', kind: 'full', size: 512, baseAddress: 0x7e00 }, board: nano })
+    expect(r.ok).toBe(false)
+    expect(!r.ok && r.reason).toMatch(/0x00007E00/)
   })
 })

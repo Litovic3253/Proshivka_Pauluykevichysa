@@ -4,6 +4,7 @@ import { DeviceLostError } from '@/drivers/errors'
 import { explainError, type ExplainedError } from '@/drivers/explainError'
 import type { BoardDriver, Progress } from '@/drivers/types'
 import { describePort } from '@/serial/portName'
+import { DisconnectGuard } from './disconnectGuard'
 import { OperationRunner, type OpState, type RunResult } from './operationRunner'
 
 export type ConnStatus =
@@ -47,6 +48,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [log, setLog] = useState<string[]>([])
   const [hasPort, setHasPort] = useState(false)
   const runner = useMemo(() => new OperationRunner(), [])
+  const guard = useMemo(() => new DisconnectGuard(), [])
   const op = useSyncExternalStore(runner.subscribe, runner.getState)
   const portRef = useRef<SerialPort | null>(null)
   const driverRef = useRef<BoardDriver | null>(null)
@@ -78,9 +80,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     runner.cancel()
     const driver = driverRef.current
     driverRef.current = null
+    guard.expect() // сброс платы с родным USB вызовет disconnect — это не выдернутый кабель
     await driver?.disconnect().catch(() => {})
     setStatus({ kind: 'idle' })
-  }, [runner])
+  }, [runner, guard])
 
   const choosePort = useCallback(async () => {
     if (!supported) {
@@ -113,6 +116,12 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     if (!supported) return
     const onDisconnect = (e: Event) => {
       if (e.target !== portRef.current) return
+      if (!guard.isCableLoss()) {
+        portRef.current = null
+        setHasPort(false)
+        addLog('Плата перезагрузилась и переподключилась по USB')
+        return
+      }
       runner.cancel(new DeviceLostError())
       driverRef.current = null
       portRef.current = null
@@ -122,7 +131,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     }
     navigator.serial.addEventListener('disconnect', onDisconnect)
     return () => navigator.serial.removeEventListener('disconnect', onDisconnect)
-  }, [supported, runner, addLog])
+  }, [supported, runner, guard, addLog])
 
   // Во время операции браузер переспросит перед закрытием вкладки.
   useEffect(() => {
