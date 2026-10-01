@@ -23,11 +23,12 @@ import {
   type FirmwareRecord,
   kindLabel,
   libraryFolder,
+  NO_TRASH,
   openLibraryFolder,
   showFirmwareInFolder,
   updateFirmware,
 } from '@/library/library'
-import { useLibrary } from '@/library/useLibrary'
+import { useLibraryState } from '@/library/useLibrary'
 import { ErrorCallout } from '../components/ErrorCallout'
 import { Panel } from '../components/Panel'
 import { formatDate, saveRecordAs } from '../library/recordFiles'
@@ -36,16 +37,22 @@ import { ImportButton } from '../library/ImportButton'
 function EditDialog({ record, onClose }: { record: FirmwareRecord | null; onClose: () => void }) {
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
+  const [error, setError] = useState<ExplainedError | null>(null)
   useEffect(() => {
     if (record) {
       setName(record.name)
       setNote(record.note)
+      setError(null)
     }
   }, [record])
   async function save() {
     if (!record) return
-    await updateFirmware(record.id, { name: name.trim() || record.name, note })
-    onClose()
+    try {
+      await updateFirmware(record.id, { name: name.trim() || record.name, note })
+      onClose()
+    } catch (e) {
+      setError(explainError(e))
+    }
   }
   return (
     <Dialog open={record !== null} onOpenChange={(open) => !open && onClose()}>
@@ -62,6 +69,7 @@ function EditDialog({ record, onClose }: { record: FirmwareRecord | null; onClos
             <Label htmlFor="edit-note">Заметка</Label>
             <Textarea id="edit-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Например: котёл на даче, до обновления" />
           </div>
+          {error && <ErrorCallout error={error} />}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Отмена</Button>
@@ -81,16 +89,29 @@ function IconLink({ href, label, children }: { href: string; label: string; chil
 }
 
 export function LibraryPage() {
-  const records = useLibrary()
+  const { records, error: listError } = useLibraryState()
   const [folder, setFolder] = useState<{ path: string; bytes: number; count: number } | null>(null)
   const [editing, setEditing] = useState<FirmwareRecord | null>(null)
   const [deleting, setDeleting] = useState<FirmwareRecord | null>(null)
+  const [deletingForever, setDeletingForever] = useState<FirmwareRecord | null>(null)
   const [error, setError] = useState<ExplainedError | null>(null)
   const act = (fn: () => Promise<void>) => void fn().then(() => setError(null), (e) => setError(explainError(e)))
 
   useEffect(() => {
-    void libraryFolder().then(setFolder)
+    void libraryFolder().then(setFolder, () => setFolder(null))
   }, [records])
+
+  /** На флешке и в сетевой папке Корзины нет — тогда спрашиваем про удаление навсегда. */
+  async function remove(rec: FirmwareRecord) {
+    try {
+      await deleteFirmware(rec.id)
+      setError(null)
+    } catch (e) {
+      const explained = explainError(e)
+      if (explained.title.startsWith(NO_TRASH)) setDeletingForever(rec)
+      else setError(explained)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -103,6 +124,9 @@ export function LibraryPage() {
           <ImportButton />
         </div>
       </div>
+      {listError && (
+        <ErrorCallout error={{ title: 'Не удалось прочитать библиотеку', hint: `${listError.title}. Прошивки на диске не тронуты.` }} />
+      )}
       <Panel title={`Прошивки · ${records.length}`}>
         {records.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -175,7 +199,21 @@ export function LibraryPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleting && act(() => deleteFirmware(deleting.id))}>Удалить</AlertDialogAction>
+            <AlertDialogAction onClick={() => deleting && void remove(deleting)}>Удалить</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={deletingForever !== null} onOpenChange={(open) => !open && setDeletingForever(null)}>
+        <AlertDialogContent className="rounded-[20px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Корзина недоступна</AlertDialogTitle>
+            <AlertDialogDescription>
+              «{deletingForever?.name}» нельзя отправить в Корзину — так бывает на флешке, в сетевой папке или если файл занят. Удалить файл навсегда?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deletingForever && act(() => deleteFirmware(deletingForever.id, true))}>Удалить навсегда</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

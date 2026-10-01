@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatSize, hexAddr } from '@/analysis/bytes'
 import type { Partition } from '@/analysis/partitions'
-import type { ExplainedError } from '@/drivers/explainError'
+import { explainError, type ExplainedError } from '@/drivers/explainError'
 import type { BoardDriver } from '@/drivers/types'
 import { checkCompatibility } from '@/flash/compat'
 import { getFirmwareData, kindLabel, MISSING_FILE } from '@/library/library'
@@ -80,7 +80,11 @@ export function FlashPage({ id }: { id: number | null }) {
     setError(null)
     setDone(null)
     if (!record || !compat?.ok) return
-    const blob = await getFirmwareData(record.id)
+    const blob = await getFirmwareData(record.id).catch((e) => {
+      setError(explainError(e))
+      return null
+    })
+    if (blob === null) return
     if (!blob) {
       setError({ title: MISSING_FILE, raw: '' })
       return

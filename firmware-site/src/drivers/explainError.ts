@@ -13,12 +13,14 @@ const LOST_HINT =
 
 export function explainError(e: unknown): ExplainedError {
   const name = (e as { name?: string } | null)?.name ?? ''
-  const message = e instanceof Error ? e.message : String(e)
+  const fullMessage = e instanceof Error ? e.message : String(e)
+  // Ошибки из главного процесса Electron приходят с приставкой «Error invoking remote method …».
+  const message = fullMessage.replace(/^Error invoking remote method '[^']*': (?:[A-Za-z]*Error: )?/, '')
   const raw =
     e instanceof BoardNotFoundError
       ? [message, ...e.attempts].join('\n')
       : e instanceof Error
-        ? `${name}: ${message}`
+        ? `${name}: ${fullMessage}`
         : String(e)
 
   if (name === 'NotFoundError') return { title: 'Порт не выбран', raw, silent: true }

@@ -37,6 +37,12 @@ describe('explainError', () => {
     expect(explainError(new DOMException('full', 'QuotaExceededError')).title).toBe('Не хватило места в браузере')
   })
 
+  it('ошибка из главного процесса показывается без служебной приставки', () => {
+    const e = explainError(new Error("Error invoking remote method 'library:remove': Error: Корзина недоступна для этого файла"))
+    expect(e.title).toBe('Корзина недоступна для этого файла')
+    expect(e.raw).toMatch(/library:remove/)
+  })
+
   it('русское сообщение показывается как есть, прочее — общим текстом', () => {
     expect(explainError(new Error('Раздел «x» не найден')).title).toBe('Раздел «x» не найден')
     const e = explainError(new Error('weird'))

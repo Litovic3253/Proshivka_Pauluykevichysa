@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { rm } from 'node:fs/promises'
+import { rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import {
   deleteFirmware, getFirmware, getFirmwareData, kindLabel, libraryFolder, listFirmware, saveFirmware,
@@ -51,6 +51,20 @@ describe('library через мост', () => {
     await rm(path.join(env.dir, 'a.bin'))
     expect(await getFirmwareData(rec.id)).toBeUndefined()
     expect(await getFirmware(rec.id)).toBeTruthy()
+  })
+
+  it('файл подменили вне программы — данные не отдаются на анализ и заливку', async () => {
+    const rec = await saveFirmware(sample('a'))
+    await writeFile(path.join(env.dir, 'a.bin'), Uint8Array.of(9, 9, 9, 9)) // другой размер
+    await expect(getFirmwareData(rec.id)).rejects.toThrow(/изменён вне программы/)
+    await writeFile(path.join(env.dir, 'a.bin'), Uint8Array.of(3, 2, 1)) // тот же размер, другое содержимое
+    await expect(getFirmwareData(rec.id)).rejects.toThrow(/изменён вне программы/)
+  })
+
+  it('удаление навсегда доходит до хранилища', async () => {
+    const rec = await saveFirmware(sample('a'))
+    await deleteFirmware(rec.id, true)
+    expect(await listFirmware()).toEqual([])
   })
 
   it('подписи типа дампа', () => {

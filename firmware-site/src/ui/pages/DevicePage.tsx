@@ -90,6 +90,8 @@ function AppCard({ info, appInfo }: { info: BoardInfo; appInfo: AppInfo | null }
 
 function ResultPanel({ outcome, onChange }: { outcome: ReadOutcome; onChange: (o: ReadOutcome) => void }) {
   const { record, name, family, data, eeprom, baseAddress, notes, sha256, saveError } = outcome
+  const [fileError, setFileError] = useState<ExplainedError | null>(null)
+  const act = (fn: () => Promise<void>) => void fn().then(() => setFileError(null), (e) => setFileError(explainError(e)))
   return (
     <Panel title="Результат">
       <div className="grid gap-4">
@@ -99,7 +101,7 @@ function ResultPanel({ outcome, onChange }: { outcome: ReadOutcome; onChange: (o
             id="fw-name"
             value={name}
             onChange={(e) => onChange({ ...outcome, name: e.target.value })}
-            onBlur={() => record && name.trim() && void updateFirmware(record.id, { name: name.trim() })}
+            onBlur={() => record && name.trim() && act(() => updateFirmware(record.id, { name: name.trim() }))}
           />
         </div>
         <div className="text-sm">
@@ -120,22 +122,23 @@ function ResultPanel({ outcome, onChange }: { outcome: ReadOutcome; onChange: (o
         ) : (
           saveError && <ErrorCallout error={saveError} tone="warn" />
         )}
+        {fileError && <ErrorCallout error={fileError} />}
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => void saveFile(`${name}.bin`, data)}>
+          <Button onClick={() => act(() => saveFile(`${name}.bin`, data))}>
             <Save className="size-4" /> Сохранить .bin
           </Button>
           {family === 'avr' && (
-            <Button variant="outline" onClick={() => void saveFile(`${name}.hex`, formatIntelHex(data, baseAddress))}>
+            <Button variant="outline" onClick={() => act(() => saveFile(`${name}.hex`, formatIntelHex(data, baseAddress)))}>
               Сохранить .hex
             </Button>
           )}
           {eeprom && (
-            <Button variant="outline" onClick={() => void saveFile(`${name}_eeprom.bin`, eeprom)}>
+            <Button variant="outline" onClick={() => act(() => saveFile(`${name}_eeprom.bin`, eeprom))}>
               Сохранить EEPROM
             </Button>
           )}
           {record && (
-            <Button variant="outline" onClick={() => void showFirmwareInFolder(record.id)}>
+            <Button variant="outline" onClick={() => act(() => showFirmwareInFolder(record.id))}>
               <FolderOpen className="size-4" /> Показать в папке
             </Button>
           )}

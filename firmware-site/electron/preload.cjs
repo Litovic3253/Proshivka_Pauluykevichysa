@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld('pauluk', {
     save: (meta, data, eeprom) => ipcRenderer.invoke('library:save', meta, data, eeprom),
     read: (id) => ipcRenderer.invoke('library:read', id),
     update: (id, patch) => ipcRenderer.invoke('library:update', id, patch),
-    remove: (id) => ipcRenderer.invoke('library:remove', id),
+    remove: (id, permanent) => ipcRenderer.invoke('library:remove', id, permanent === true),
     folder: () => ipcRenderer.invoke('library:folder'),
     openFolder: () => ipcRenderer.invoke('library:openFolder'),
     showInFolder: (id) => ipcRenderer.invoke('library:showInFolder', id),

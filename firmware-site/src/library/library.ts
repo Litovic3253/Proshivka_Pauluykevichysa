@@ -6,6 +6,8 @@ import type { DumpKind, FirmwareBlob, FirmwareRecord } from './types'
 export type { DumpKind, FirmwareBlob, FirmwareRecord }
 
 export const MISSING_FILE = 'Файл прошивки не найден в папке — его удалили или переименовали вручную'
+export const CHANGED_FILE = 'Файл прошивки изменён вне программы: размер или контрольная сумма не совпадают с записью. Анализировать и заливать его нельзя'
+export const NO_TRASH = 'Корзина недоступна'
 
 export interface NewFirmware {
   name: string
@@ -47,9 +49,12 @@ export async function getFirmware(id: number): Promise<FirmwareRecord | undefine
   return (await listFirmware()).find((r) => r.id === id)
 }
 
+/** Байты прошивки. Файл лежит в обычной папке, поэтому сверяем его с записью, прежде чем отдать. */
 export async function getFirmwareData(id: number): Promise<FirmwareBlob | undefined> {
-  const blob = await bridge().library.read(id)
-  return blob ? { id, ...blob } : undefined
+  const [blob, rec] = await Promise.all([bridge().library.read(id), getFirmware(id)])
+  if (!blob || !rec) return undefined
+  if (blob.data.length !== rec.size || (await sha256Hex(blob.data)) !== rec.sha256) throw new Error(CHANGED_FILE)
+  return { id, ...blob }
 }
 
 export async function updateFirmware(id: number, patch: Partial<Pick<FirmwareRecord, 'name' | 'note'>>): Promise<void> {
@@ -57,8 +62,9 @@ export async function updateFirmware(id: number, patch: Partial<Pick<FirmwareRec
   changed()
 }
 
-export async function deleteFirmware(id: number): Promise<void> {
-  await bridge().library.remove(id)
+/** permanent — мимо Корзины: на флешке и в сетевой папке Корзины нет. */
+export async function deleteFirmware(id: number, permanent = false): Promise<void> {
+  await bridge().library.remove(id, permanent)
   changed()
 }
 

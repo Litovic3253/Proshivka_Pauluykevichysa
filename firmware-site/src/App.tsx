@@ -7,7 +7,7 @@ import { AppShell } from '@/ui/layout/AppShell'
 export default function App() {
   // Заставка закрывается, когда интерфейс нарисован и библиотека прочитана.
   useEffect(() => {
-    void listFirmware().finally(() => bridge().app.ready())
+    void listFirmware().then(() => {}, () => {}).finally(() => bridge().app.ready()) // ошибку списка покажет экран «Библиотека»
   }, [])
   return (
     <ConnectionProvider>

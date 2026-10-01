@@ -17,7 +17,7 @@ export interface PaulukBridge {
     save(meta: NewFirmwareMeta, data: Uint8Array, eeprom?: Uint8Array): Promise<FirmwareRecord>
     read(id: number): Promise<{ data: Uint8Array; eeprom?: Uint8Array } | null>
     update(id: number, patch: { name?: string; note?: string }): Promise<FirmwareRecord>
-    remove(id: number): Promise<void>
+    remove(id: number, permanent?: boolean): Promise<void>
     folder(): Promise<{ path: string; bytes: number; count: number }>
     openFolder(): Promise<void>
     showInFolder(id: number): Promise<void>

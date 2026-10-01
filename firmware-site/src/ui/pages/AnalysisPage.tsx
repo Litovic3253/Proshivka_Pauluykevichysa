@@ -15,7 +15,7 @@ import { ErrorCallout } from '../components/ErrorCallout'
 import { Panel } from '../components/Panel'
 import { formatDate, saveRecordAs } from '../library/recordFiles'
 
-type Loaded = { record: FirmwareRecord; data: Uint8Array } | 'missing' | 'no-file' | null
+type Loaded = { record: FirmwareRecord; data: Uint8Array } | { failed: ExplainedError } | 'missing' | 'no-file' | null
 
 function Picker() {
   const records = useLibrary()
@@ -117,9 +117,14 @@ export function AnalysisPage({ id }: { id: number | null }) {
   useEffect(() => {
     if (id === null) return
     let active = true
-    void Promise.all([getFirmware(id), getFirmwareData(id)]).then(([record, blob]) => {
-      if (active) setLoaded(!record ? 'missing' : !blob ? 'no-file' : { record, data: blob.data })
-    })
+    void Promise.all([getFirmware(id), getFirmwareData(id)]).then(
+      ([record, blob]) => {
+        if (active) setLoaded(!record ? 'missing' : !blob ? 'no-file' : { record, data: blob.data })
+      },
+      (e) => {
+        if (active) setLoaded({ failed: explainError(e) })
+      },
+    )
     return () => {
       active = false
     }
@@ -127,6 +132,13 @@ export function AnalysisPage({ id }: { id: number | null }) {
 
   if (id === null) return <Picker />
   if (loaded === null) return <Panel title="Анализ">Загружаю…</Panel>
+  if (typeof loaded === 'object' && 'failed' in loaded) {
+    return (
+      <Panel title="Анализ">
+        <ErrorCallout error={loaded.failed} />
+      </Panel>
+    )
+  }
   if (loaded === 'no-file') {
     return (
       <Panel title="Анализ">

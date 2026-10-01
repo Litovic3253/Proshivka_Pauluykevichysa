@@ -3,10 +3,12 @@ import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { dataDir } from './dataDir.mjs'
-import { createLibraryStore } from './libraryStore.mjs'
+import { allowPermission, isOwnPage } from './guards.mjs'
+import { createLibraryStore, safeFileName } from './libraryStore.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(here, '..')
+const indexFile = path.join(root, 'dist', 'index.html')
 const SPLASH_TIMEOUT = 15_000
 
 function createSplash() {
@@ -34,24 +36,33 @@ function createMain() {
 function registerLibrary(getMain) {
   const dir = path.join(dataDir({ env: process.env, isPackaged: app.isPackaged, execPath: process.execPath, devRoot: root }), 'Прошивки')
   const store = createLibraryStore(dir, { trash: (p) => shell.trashItem(p), log: (m) => console.warn(m) })
-  ipcMain.handle('library:list', () => store.list())
-  ipcMain.handle('library:save', (_e, meta, data, eeprom) => store.save(meta, data, eeprom))
-  ipcMain.handle('library:read', (_e, id) => store.read(Number(id)))
-  ipcMain.handle('library:update', (_e, id, patch) => store.update(Number(id), patch ?? {}))
-  ipcMain.handle('library:remove', (_e, id) => store.remove(Number(id)))
-  ipcMain.handle('library:folder', () => store.folderInfo())
-  ipcMain.handle('library:openFolder', async () => {
+  /** Команды принимаются только от главного окна программы. */
+  const handle = (channel, fn) =>
+    ipcMain.handle(channel, (event, ...args) => {
+      if (event.sender !== getMain()?.webContents) throw new Error('Команда отклонена: не из окна программы')
+      return fn(...args)
+    })
+  handle('library:list', () => store.list())
+  handle('library:save', (meta, data, eeprom) => store.save(meta, data, eeprom))
+  handle('library:read', (id) => store.read(Number(id)))
+  handle('library:update', (id, patch) => store.update(Number(id), patch ?? {}))
+  handle('library:remove', (id, permanent) => store.remove(Number(id), permanent === true))
+  handle('library:folder', () => store.folderInfo())
+  handle('library:openFolder', async () => {
     await store.list()
     await shell.openPath(store.dir)
   })
-  ipcMain.handle('library:showInFolder', async (_e, id) => {
+  handle('library:showInFolder', async (id) => {
     const p = await store.filePath(Number(id))
     if (p) shell.showItemInFolder(p)
     else await shell.openPath(store.dir)
   })
-  ipcMain.handle('files:saveAs', async (_e, defaultName, data) => {
-    const name = String(defaultName)
-    const isHex = /\.hex$/i.test(name)
+  handle('files:saveAs', async (defaultName, data) => {
+    if (typeof data !== 'string' && !(data instanceof Uint8Array)) throw new Error('Неверные данные для сохранения')
+    const ext = path.extname(String(defaultName)).toLowerCase() === '.hex' ? '.hex' : '.bin'
+    // В названии могут быть / \ : * ? — окно «Сохранить как…» такое имя не примет.
+    const name = safeFileName(path.basename(String(defaultName), path.extname(String(defaultName)))) + ext
+    const isHex = ext === '.hex'
     const result = await dialog.showSaveDialog(getMain(), {
       defaultPath: path.join(app.getPath('downloads'), name),
       filters: [isHex ? { name: 'Intel HEX', extensions: ['hex'] } : { name: 'Прошивка', extensions: ['bin'] }],
@@ -67,10 +78,15 @@ function registerSerial(getMain) {
   let pending = null
   let ports = []
   const toChoice = (p) => ({ portId: p.portId, portName: p.portName, displayName: p.displayName, vendorId: p.vendorId, productId: p.productId })
-  const send = () => getMain()?.webContents.send('ports:request', ports.map(toChoice))
+  const send = () => {
+    const main = getMain()
+    if (main && !main.isDestroyed()) main.webContents.send('ports:request', ports.map(toChoice))
+  }
 
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'serial' || permission === 'clipboard-sanitized-write')
-  session.defaultSession.setDevicePermissionHandler((details) => details.deviceType === 'serial')
+  const isMain = (wc) => wc !== null && wc === getMain()?.webContents
+  session.defaultSession.setPermissionCheckHandler((wc, permission) => isMain(wc) && allowPermission(permission))
+  session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => callback(isMain(wc) && allowPermission(permission)))
+  session.defaultSession.setDevicePermissionHandler((details) => details.deviceType === 'serial' && details.origin.startsWith('file://'))
   session.defaultSession.on('select-serial-port', (event, portList, _wc, callback) => {
     event.preventDefault()
     pending?.('') // предыдущий запрос, если был, отменяем
@@ -116,26 +132,53 @@ export async function startApp() {
 
   main = createMain()
   main.removeMenu()
-  main.loadFile(path.join(root, 'dist', 'index.html'))
+  // Окно показывает только свою страницу: ни новых окон, ни перехода по перетащенному файлу или ссылке.
+  main.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  main.webContents.on('will-navigate', (event, url) => {
+    if (!isOwnPage(url, indexFile)) event.preventDefault()
+  })
+  // Интерфейс просит не закрывать окно во время чтения или заливки — Electron сам вопроса не задаёт.
+  main.webContents.on('will-prevent-unload', (event) => {
+    const choice = dialog.showMessageBoxSync(main, {
+      type: 'question',
+      buttons: ['Остаться', 'Закрыть'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Прошивки Паулюкевичуса',
+      message: 'Идёт работа с платой',
+      detail: 'Если закрыть программу сейчас, чтение или заливка прервутся. Прерванную заливку нужно будет повторить.',
+    })
+    if (choice === 1) event.preventDefault() // разрешить закрытие
+  })
+  main.loadFile(indexFile)
   main.once('ready-to-show', () => step(60, 'Загружаю интерфейс'))
 
   let resolveShown
   const shown = new Promise((r) => {
     resolveShown = r
   })
-  let finished = false
-  const finish = async () => {
-    if (finished) return
-    finished = true
-    if (!splash.isDestroyed()) await splash.webContents.executeJavaScript('window.finish()').catch(() => {})
+  let revealed = false
+  const reveal = () => {
+    if (revealed) return
+    revealed = true
     if (!splash.isDestroyed()) splash.destroy()
-    main.show()
+    if (!main.isDestroyed()) main.show()
     resolveShown()
   }
+  let finishing = false
+  const finish = async () => {
+    if (finishing) return
+    finishing = true
+    if (!splash.isDestroyed()) await splash.webContents.executeJavaScript('window.finish()').catch(() => {})
+    reveal()
+  }
   ipcMain.once('app:ready', () => void finish())
-  setTimeout(() => void finish(), SPLASH_TIMEOUT)
+  // Запасной путь: окно покажется, даже если интерфейс не ответил или заставка зависла.
+  setTimeout(reveal, SPLASH_TIMEOUT)
 
   app.on('second-instance', () => {
+    if (main.isDestroyed()) return
+    if (!revealed) return // ещё идёт заставка — окно покажется само
     if (main.isMinimized()) main.restore()
     main.show()
     main.focus()

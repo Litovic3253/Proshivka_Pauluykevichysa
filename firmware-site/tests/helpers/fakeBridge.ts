@@ -19,7 +19,7 @@ export async function installFakeBridge() {
       save: (meta, data, eeprom) => store.save(meta, data, eeprom),
       read: (id) => store.read(id),
       update: (id, patch) => store.update(id, patch),
-      remove: (id) => store.remove(id),
+      remove: (id, permanent) => store.remove(id, permanent),
       folder: () => store.folderInfo(),
       openFolder: async () => {},
       showInFolder: async (id) => { shown.push(id) },
