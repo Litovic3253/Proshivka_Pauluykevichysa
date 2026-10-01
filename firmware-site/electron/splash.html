@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; style-src 'unsafe-inline' file:; script-src 'unsafe-inline'; font-src file:; img-src file:" />
+<style>
+  @font-face { font-family: "JetBrains Mono"; src: url("../src/assets/fonts/JetBrainsMono-Medium.ttf") format("truetype"); font-weight: 500; }
+  :root { --bg: #FFFFFF; --fg: #09090B; --muted: #71717A; --line: #E4E4E7; --accent: #FABD2F; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #141417; --fg: #FAFAFA; --muted: #A1A1AA; --line: #27272A; } }
+  html, body { margin: 0; height: 100%; background: transparent; font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--fg); overflow: hidden; user-select: none; }
+  .card { position: absolute; inset: 12px; border-radius: 28px; background: var(--bg); border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 28px 60px -16px rgba(0,0,0,.45); }
+  .stage { position: relative; width: 120px; height: 120px; display: grid; place-items: center; perspective: 600px; }
+  .halo { position: absolute; width: 88px; height: 88px; border-radius: 50%; background: var(--accent); opacity: .25; animation: halo 1.4s ease-out infinite; }
+  .logo { width: 88px; height: 88px; animation: flip 1.5s cubic-bezier(.68,-.55,.27,1.55) infinite; }
+  @keyframes flip { 0%, 30% { transform: rotateY(0) } 50%, 80% { transform: rotateY(180deg) } 100% { transform: rotateY(360deg) } }
+  @keyframes halo { 0% { transform: scale(1); opacity: .35 } 100% { transform: scale(1.6); opacity: 0 } }
+  .title { margin-top: 18px; font-size: 14px; font-weight: 500; }
+  .percent { margin-top: 14px; font-size: 30px; font-weight: 500; }
+  .bar { width: 220px; height: 4px; border-radius: 4px; background: var(--line); margin-top: 10px; overflow: hidden; }
+  .fill { height: 100%; width: 0; background: var(--accent); border-radius: 4px; }
+  .step { margin-top: 10px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="stage"><div class="halo"></div><img class="logo" src="../dist/icon.png" alt="" /></div>
+    <div class="title">Прошивки Паулюкевичуса</div>
+    <div class="percent" id="percent">0%</div>
+    <div class="bar"><div class="fill" id="fill"></div></div>
+    <div class="step" id="step">Запускаю</div>
+  </div>
+<script>
+  // Как в Студии: проценты догоняют реальные шаги запуска по 1 % за 18 мс,
+  // а подпись шага идёт вместе с процентами, а не убегает вперёд.
+  let target = 0, shown = 0
+  const steps = [] // [до какого %, подпись]
+  const percentEl = document.getElementById('percent'), fillEl = document.getElementById('fill'), stepEl = document.getElementById('step')
+  function label() {
+    const current = steps.find(([pct]) => shown < pct) ?? steps[steps.length - 1]
+    return current ? current[1] : 'Запускаю'
+  }
+  function render() { percentEl.textContent = shown + '%'; fillEl.style.width = shown + '%'; stepEl.textContent = label() }
+  window.setStep = (pct, text) => {
+    target = Math.max(target, pct)
+    if (text && !steps.some(([p]) => p === pct)) { steps.push([pct, text]); steps.sort((a, b) => a[0] - b[0]) }
+  }
+  window.finish = () => new Promise((resolve) => {
+    window.setStep(100, 'Готово')
+    const wait = () => (shown >= 100 ? setTimeout(resolve, 150) : setTimeout(wait, 30))
+    wait()
+  })
+  setInterval(() => { if (shown < target) { shown++; render() } }, 18)
+  render()
+</script>
+</body>
+</html>

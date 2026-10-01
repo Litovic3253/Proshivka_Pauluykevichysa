@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
+import { bridge } from '@/bridge'
+import { listFirmware } from '@/library/library'
 import { ConnectionProvider } from '@/state/ConnectionContext'
 import { AppShell } from '@/ui/layout/AppShell'
-import { UnsupportedBrowser } from '@/ui/layout/UnsupportedBrowser'
 
 export default function App() {
-  const supported = 'serial' in navigator && window.isSecureContext
-  const [limited, setLimited] = useState(false)
-  if (!supported && !limited) return <UnsupportedBrowser onContinue={() => setLimited(true)} />
+  // Заставка закрывается, когда интерфейс нарисован и библиотека прочитана.
+  useEffect(() => {
+    void listFirmware().finally(() => bridge().app.ready())
+  }, [])
   return (
     <ConnectionProvider>
       <AppShell />

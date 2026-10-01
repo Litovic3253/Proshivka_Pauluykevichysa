@@ -29,7 +29,7 @@ export function Sidebar({ route, onTheme }: { route: Route; onTheme: () => void 
   return (
     <nav className="sticky top-0 flex h-screen w-[72px] shrink-0 flex-col gap-1 border-r bg-card px-2.5 py-3 min-[900px]:w-[276px] min-[900px]:px-3">
       <a href="#/device" className="mb-4 flex items-center gap-3 px-1.5 py-1">
-        <img src="/icon.png" alt="" className="size-9 rounded-[10px]" />
+        <img src="./icon.png" alt="" className="size-9 rounded-[10px]" />
         <span className="hidden leading-tight min-[900px]:block">
           <span className="block text-sm font-medium">Прошивки</span>
           <span className="block text-xs text-muted-foreground">Паулюкевичуса</span>

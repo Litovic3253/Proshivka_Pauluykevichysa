@@ -57,7 +57,7 @@ function statusView(status: ConnStatus): { tone: Tone; title: string; subtitle: 
       return {
         tone: 'idle',
         title: 'Порт не выбран',
-        subtitle: 'Подключите Arduino или ESP32 по USB и нажмите «Выбрать COM-порт». Номер порта (COM5 и т. п.) виден в окне выбора браузера.',
+        subtitle: 'Подключите Arduino или ESP32 по USB и нажмите «Выбрать COM-порт». В списке портов будет видно, какой из них — плата (COM5 · CH340 и т. п.).',
       }
     case 'detecting':
       return { tone: 'warn', title: 'Определяю плату…', subtitle: status.portLabel }

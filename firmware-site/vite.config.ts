@@ -5,6 +5,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  // Программа открывает интерфейс через file:// — пути к файлам должны быть относительными
+  base: './',
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
   // 127.0.0.1, а не localhost: Node может слушать только IPv6 [::1], и браузер не достучится
